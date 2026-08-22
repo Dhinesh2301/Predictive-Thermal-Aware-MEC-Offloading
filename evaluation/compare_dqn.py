@@ -51,6 +51,13 @@ ACTION_NAMES = {
 
 
 # ============================================================
+# THERMAL PARAMETERS
+# ============================================================
+
+THERMAL_THRESHOLD = 85.0
+
+
+# ============================================================
 # LOAD LATEST GRU TEMPERATURE
 # ============================================================
 
@@ -83,6 +90,192 @@ def load_latest_gru_temperature():
 
 
 # ============================================================
+# ESTIMATE THERMAL EFFECT OF EXECUTION ACTION
+#
+# This represents the expected thermal behavior of each
+# execution location after the task is assigned.
+#
+# LOCAL:
+#   Device executes task locally → temperature increases
+#
+# EDGE 1 / EDGE 2:
+#   Heavy computation is offloaded → device temperature
+#   decreases due to reduced local CPU activity
+#
+# CLOUD:
+#   Maximum remote offloading → strongest local thermal relief
+# ============================================================
+
+def calculate_post_execution_temperature(
+    predicted_temperature,
+    action,
+    task_cycles
+):
+
+    # --------------------------------------------------------
+    # Normalize task size for thermal calculation
+    # --------------------------------------------------------
+
+    task_factor = min(
+        task_cycles / 1000.0,
+        1.0
+    )
+
+
+    # --------------------------------------------------------
+    # THERMAL CHANGE BASED ON EXECUTION LOCATION
+    # --------------------------------------------------------
+
+    if action == 0:
+
+        # LOCAL EXECUTION
+        #
+        # More local CPU activity increases temperature.
+        #
+        # Temperature increase:
+        # Base heat generation + task workload effect
+
+        thermal_change = (
+            1.5
+            +
+            (3.0 * task_factor)
+        )
+
+
+    elif action == 1:
+
+        # EDGE 1 OFFLOADING
+        #
+        # Most computation is moved away from IoT device.
+        # The device gets thermal relief.
+
+        thermal_change = (
+            -(
+                1.0
+                +
+                (2.5 * task_factor)
+            )
+        )
+
+
+    elif action == 2:
+
+        # EDGE 2 OFFLOADING
+
+        thermal_change = (
+            -(
+                1.2
+                +
+                (2.8 * task_factor)
+            )
+        )
+
+
+    elif action == 3:
+
+        # CLOUD OFFLOADING
+        #
+        # Local CPU computation is minimized.
+
+        thermal_change = (
+            -(
+                1.5
+                +
+                (3.0 * task_factor)
+            )
+        )
+
+
+    else:
+
+        thermal_change = 0.0
+
+
+    # --------------------------------------------------------
+    # CALCULATE POST-EXECUTION TEMPERATURE
+    # --------------------------------------------------------
+
+    post_temperature = (
+        predicted_temperature
+        +
+        thermal_change
+    )
+
+
+    # Prevent unrealistic negative temperature
+
+    post_temperature = max(
+        0.0,
+        post_temperature
+    )
+
+
+    # --------------------------------------------------------
+    # TEMPERATURE REDUCTION
+    # --------------------------------------------------------
+
+    temperature_reduction = (
+        predicted_temperature
+        -
+        post_temperature
+    )
+
+
+    # --------------------------------------------------------
+    # THERMAL HEADROOM AFTER EXECUTION
+    # --------------------------------------------------------
+
+    post_headroom = (
+        THERMAL_THRESHOLD
+        -
+        post_temperature
+    )
+
+
+    # --------------------------------------------------------
+    # THERMAL STATUS
+    # --------------------------------------------------------
+
+    if post_temperature < 50:
+
+        thermal_status = "COOL"
+
+    elif post_temperature < 70:
+
+        thermal_status = "NORMAL"
+
+    elif post_temperature < THERMAL_THRESHOLD:
+
+        thermal_status = "HIGH"
+
+    else:
+
+        thermal_status = "CRITICAL"
+
+
+    return {
+
+        "predicted_temperature":
+            predicted_temperature,
+
+        "post_temperature":
+            post_temperature,
+
+        "temperature_change":
+            thermal_change,
+
+        "temperature_reduction":
+            temperature_reduction,
+
+        "thermal_headroom":
+            post_headroom,
+
+        "thermal_status":
+            thermal_status
+    }
+
+
+# ============================================================
 # PREPARE ENVIRONMENT STATE USING GRU TEMPERATURE
 # ============================================================
 
@@ -92,30 +285,35 @@ def reset_environment_with_temperature(
 ):
 
     # Reset environment normally
+
     state = env.reset()
 
 
-    # If GRU temperature is available,
-    # replace the temperature in the state
+    # --------------------------------------------------------
+    # APPLY GRU PREDICTED TEMPERATURE
+    # --------------------------------------------------------
+
     if predicted_temperature is not None:
 
         # State index 0 = Predicted Temperature
-        state[0] = predicted_temperature
+
+        state[0] = (
+            predicted_temperature
+        )
 
 
         # State index 1 = Thermal Headroom
+
         state[1] = (
-            85.0 - predicted_temperature
+            THERMAL_THRESHOLD
+            -
+            predicted_temperature
         )
 
 
         # ----------------------------------------------------
         # UPDATE ENVIRONMENT INTERNAL VARIABLES
         # ----------------------------------------------------
-
-        # Different environment versions may use
-        # different variable names.
-        # We update them if they exist.
 
         if hasattr(
             env,
@@ -153,7 +351,9 @@ def reset_environment_with_temperature(
         ):
 
             env.thermal_headroom = (
-                85.0 - predicted_temperature
+                THERMAL_THRESHOLD
+                -
+                predicted_temperature
             )
 
 
@@ -175,7 +375,11 @@ def reset_environment_with_temperature(
 def compare_dqn_with_baselines():
 
     print("=" * 75)
-    print("THERMAL-AWARE DQN VS BASELINE METHODS")
+
+    print(
+        "PREDICTIVE THERMAL-AWARE DQN VS BASELINE METHODS"
+    )
+
     print("=" * 75)
 
 
@@ -210,10 +414,8 @@ def compare_dqn_with_baselines():
     # CREATE MEC ENVIRONMENT
     # --------------------------------------------------------
 
-    # IMPORTANT:
-    # Do NOT pass predicted_temperature here.
-
     env = MECEnvironment()
+
 
     print(
         "\nMEC Environment Created Successfully!"
@@ -228,6 +430,7 @@ def compare_dqn_with_baselines():
         state_size=7,
         action_size=4
     )
+
 
     print(
         "DQN Agent Created Successfully!"
@@ -269,6 +472,25 @@ def compare_dqn_with_baselines():
     )
 
 
+    current_temperature = (
+        float(state[0])
+    )
+
+
+    thermal_headroom = (
+        float(state[1])
+    )
+
+
+    task_cycles = (
+        float(state[2])
+    )
+
+
+    # --------------------------------------------------------
+    # CURRENT SYSTEM STATE
+    # --------------------------------------------------------
+
     print(
         "\n" + "-" * 75
     )
@@ -284,13 +506,13 @@ def compare_dqn_with_baselines():
 
     print(
         f"Predicted Temperature : "
-        f"{state[0]:.2f} °C"
+        f"{current_temperature:.2f} °C"
     )
 
 
     print(
         f"Thermal Headroom      : "
-        f"{state[1]:.2f} °C"
+        f"{thermal_headroom:.2f} °C"
     )
 
 
@@ -346,40 +568,91 @@ def compare_dqn_with_baselines():
 
     for action in range(4):
 
-        # Reset environment and apply
-        # the same GRU temperature
+        # ----------------------------------------------------
+        # Reset environment
+        # ----------------------------------------------------
+
         state = reset_environment_with_temperature(
             env,
             predicted_temperature
         )
 
 
+        # ----------------------------------------------------
         # Execute baseline action
+        # ----------------------------------------------------
+
         next_state, reward, done, info = (
             env.step(action)
         )
 
 
+        # ----------------------------------------------------
+        # CALCULATE THERMAL EFFECT
+        # ----------------------------------------------------
+
+        thermal_result = (
+            calculate_post_execution_temperature(
+                current_temperature,
+                action,
+                task_cycles
+            )
+        )
+
+
         result = {
 
-            "method": ACTION_NAMES[action],
+            "method":
+                ACTION_NAMES[action],
 
-            "action": action,
+            "action":
+                action,
 
-            "latency": info["latency"],
+            "latency":
+                info["latency"],
 
-            "energy": info["energy"],
+            "energy":
+                info["energy"],
 
-            "deadline_met": info["deadline_met"],
+            "deadline_met":
+                info["deadline_met"],
 
-            "thermal_safe": info["thermal_safe"],
+            "thermal_safe":
+                info["thermal_safe"],
 
-            "reward": reward
+            "reward":
+                reward,
+
+            "post_temperature":
+                thermal_result[
+                    "post_temperature"
+                ],
+
+            "temperature_reduction":
+                thermal_result[
+                    "temperature_reduction"
+                ],
+
+            "post_headroom":
+                thermal_result[
+                    "thermal_headroom"
+                ],
+
+            "thermal_status":
+                thermal_result[
+                    "thermal_status"
+                ]
         }
 
 
-        results.append(result)
+        results.append(
+            result
+        )
 
+
+        # ----------------------------------------------------
+        # DISPLAY BASELINE RESULT
+        # ----------------------------------------------------
 
         print(
             f"\nMethod: "
@@ -417,9 +690,27 @@ def compare_dqn_with_baselines():
         )
 
 
-    # --------------------------------------------------------
+        print(
+            f"Post Temperature : "
+            f"{thermal_result['post_temperature']:.2f} °C"
+        )
+
+
+        print(
+            f"Temperature Change : "
+            f"{thermal_result['temperature_change']:.2f} °C"
+        )
+
+
+        print(
+            f"Thermal Status : "
+            f"{thermal_result['thermal_status']}"
+        )
+
+
+    # ========================================================
     # DQN DECISION
-    # --------------------------------------------------------
+    # ========================================================
 
     print(
         "\n" + "=" * 75
@@ -434,15 +725,20 @@ def compare_dqn_with_baselines():
     )
 
 
-    # Reset environment with
-    # the latest GRU prediction
+    # --------------------------------------------------------
+    # RESET ENVIRONMENT WITH GRU TEMPERATURE
+    # --------------------------------------------------------
+
     state = reset_environment_with_temperature(
         env,
         predicted_temperature
     )
 
 
-    # Convert state to PyTorch tensor
+    # --------------------------------------------------------
+    # CONVERT STATE TO PYTORCH TENSOR
+    # --------------------------------------------------------
+
     state_tensor = torch.FloatTensor(
         state
     ).unsqueeze(0)
@@ -476,9 +772,28 @@ def compare_dqn_with_baselines():
 
 
     next_state, dqn_reward, done, dqn_info = (
-        env.step(dqn_action)
+        env.step(
+            dqn_action
+        )
     )
 
+
+    # --------------------------------------------------------
+    # CALCULATE DQN THERMAL IMPROVEMENT
+    # --------------------------------------------------------
+
+    dqn_thermal = (
+        calculate_post_execution_temperature(
+            current_temperature,
+            dqn_action,
+            task_cycles
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # DISPLAY DQN DECISION
+    # --------------------------------------------------------
 
     print(
         f"\nDQN Selected Action : "
@@ -522,9 +837,86 @@ def compare_dqn_with_baselines():
     )
 
 
+    print(
+        "\n" + "-" * 75
+    )
+
+    print(
+        "THERMAL MITIGATION ANALYSIS"
+    )
+
+    print(
+        "-" * 75
+    )
+
+
+    print(
+        f"Temperature Before Execution : "
+        f"{current_temperature:.2f} °C"
+    )
+
+
+    print(
+        f"Temperature After Execution  : "
+        f"{dqn_thermal['post_temperature']:.2f} °C"
+    )
+
+
+    print(
+        f"Temperature Reduction        : "
+        f"{dqn_thermal['temperature_reduction']:.2f} °C"
+    )
+
+
+    print(
+        f"Post Thermal Headroom        : "
+        f"{dqn_thermal['thermal_headroom']:.2f} °C"
+    )
+
+
+    print(
+        f"Post Thermal Status          : "
+        f"{dqn_thermal['thermal_status']}"
+    )
+
+
     # --------------------------------------------------------
+    # THERMAL IMPROVEMENT STATUS
+    # --------------------------------------------------------
+
+    if (
+        dqn_thermal[
+            "temperature_reduction"
+        ] > 0
+    ):
+
+        print(
+            "\nThermal Improvement Status   : "
+            "TEMPERATURE REDUCED"
+        )
+
+    elif (
+        dqn_thermal[
+            "temperature_reduction"
+        ] < 0
+    ):
+
+        print(
+            "\nThermal Improvement Status   : "
+            "LOCAL EXECUTION HEAT GENERATED"
+        )
+
+    else:
+
+        print(
+            "\nThermal Improvement Status   : "
+            "NO SIGNIFICANT CHANGE"
+        )
+
+
+    # ========================================================
     # FIND BEST BASELINE
-    # --------------------------------------------------------
+    # ========================================================
 
     best_baseline = max(
         results,
@@ -532,9 +924,19 @@ def compare_dqn_with_baselines():
     )
 
 
-    # --------------------------------------------------------
-    # FINAL COMPARISON
-    # --------------------------------------------------------
+    # ========================================================
+    # FIND BEST THERMAL BASELINE
+    # ========================================================
+
+    best_thermal_baseline = min(
+        results,
+        key=lambda x: x["post_temperature"]
+    )
+
+
+    # ========================================================
+    # FINAL PERFORMANCE COMPARISON
+    # ========================================================
 
     print(
         "\n" + "=" * 75
@@ -573,9 +975,21 @@ def compare_dqn_with_baselines():
     )
 
 
-    # --------------------------------------------------------
+    print(
+        f"\nBest Thermal Method : "
+        f"{best_thermal_baseline['method']}"
+    )
+
+
+    print(
+        f"Lowest Temperature  : "
+        f"{best_thermal_baseline['post_temperature']:.2f} °C"
+    )
+
+
+    # ========================================================
     # PERFORMANCE IMPROVEMENT
-    # --------------------------------------------------------
+    # ========================================================
 
     reward_difference = (
         dqn_reward
@@ -618,9 +1032,9 @@ def compare_dqn_with_baselines():
         )
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # DISPLAY Q VALUES
-    # --------------------------------------------------------
+    # ========================================================
 
     print(
         "\n" + "-" * 75
@@ -653,12 +1067,89 @@ def compare_dqn_with_baselines():
         )
 
 
+    # ========================================================
+    # FINAL PROJECT VALIDATION
+    # ========================================================
+
     print(
         "\n" + "=" * 75
     )
 
     print(
-        "DQN VS BASELINE COMPARISON "
+        "PREDICTIVE THERMAL-AWARE OFFLOADING VALIDATION"
+    )
+
+    print(
+        "=" * 75
+    )
+
+
+    print(
+        "\n1. Predictive Capability:"
+    )
+
+    print(
+        "   GRU predicts the future CPU temperature "
+        "before the offloading decision."
+    )
+
+
+    print(
+        "\n2. Thermal Awareness:"
+    )
+
+    print(
+        "   The predicted temperature is included in "
+        "the DQN environment state."
+    )
+
+
+    print(
+        "\n3. Thermal-Aware Action:"
+    )
+
+    print(
+        f"   DQN selected: "
+        f"{ACTION_NAMES[dqn_action]}"
+    )
+
+
+    print(
+        "\n4. Thermal Mitigation:"
+    )
+
+    print(
+        f"   Temperature change after decision: "
+        f"{dqn_thermal['temperature_change']:.2f} °C"
+    )
+
+
+    print(
+        "\n5. Deadline Constraint:"
+    )
+
+    print(
+        f"   Deadline satisfied: "
+        f"{dqn_info['deadline_met']}"
+    )
+
+
+    print(
+        "\n6. Energy Optimization:"
+    )
+
+    print(
+        f"   Energy consumption: "
+        f"{dqn_info['energy']:.2f} J"
+    )
+
+
+    print(
+        "\n" + "=" * 75
+    )
+
+    print(
+        "PREDICTIVE THERMAL-AWARE MEC OFFLOADING "
         "COMPLETED SUCCESSFULLY!"
     )
 
