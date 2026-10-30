@@ -540,8 +540,6 @@ streamlit run app.py
 
 Starts the interactive Streamlit application.
 
-
-### Output
 <img width="1870" height="777" alt="image" src="https://github.com/user-attachments/assets/9b6f8b6a-9369-400a-a1e5-c9fadac25d7f" />
 <img width="1795" height="463" alt="image" src="https://github.com/user-attachments/assets/39a3898f-9e4d-4394-9386-cf51718bd88d" />
 <img width="1872" height="527" alt="image" src="https://github.com/user-attachments/assets/0a05bfeb-5a38-4d84-87d2-91663c12da80" />
