@@ -29,8 +29,6 @@
 - [Real-World Applications](#-real-world-applications)
 - [Installation and Setup](#-installation-and-setup)
 - [Execution Workflow](#-execution-workflow)
-- [Limitations](#-limitations)
-- [Future Enhancements](#-future-enhancements)
 - [Contributors](#-contributors)
 - [License](#-license)
 
