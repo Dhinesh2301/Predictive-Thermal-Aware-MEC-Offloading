@@ -114,55 +114,7 @@ The overall objective is to make proactive offloading decisions while balancing 
 
 The system follows a sequential architecture in which task generation, thermal prediction, decision-making, task execution, and performance evaluation are integrated.
 
-```text
-              ┌─────────────────────────┐
-              │   IoT Task Generation   │
-              └────────────┬────────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │ System State Collection │
-              │ CPU / Memory / Workload │
-              └────────────┬────────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │   GRU Temperature       │
-              │      Prediction         │
-              └────────────┬────────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │ Thermal Headroom        │
-              │     Calculation         │
-              └────────────┬────────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │ DQN Offloading Agent    │
-              │ Intelligent Decision   │
-              └────────────┬────────────┘
-                           │
-                           ▼
-              ┌─────────────────────────┐
-              │   Task Execution        │
-              └────────────┬────────────┘
-                           │
-             ┌─────────────┼─────────────┐
-             ▼             ▼             ▼
-       ┌──────────┐  ┌───────────┐  ┌───────────┐
-       │  Local   │  │   Edge    │  │   Cloud   │
-       │  Device  │  │  Servers  │  │  Server   │
-       └──────────┘  └───────────┘  └───────────┘
-             │             │             │
-             └─────────────┼─────────────┘
-                           ▼
-              ┌─────────────────────────┐
-              │ Performance Evaluation  │
-              │ Latency / Energy / Temp │
-              │ Deadline / Task Success │
-              └─────────────────────────┘
-```
+<img width="535" height="596" alt="image" src="https://github.com/user-attachments/assets/4a8860ad-e0ef-43cc-a3b4-5be04e47f856" />
 
 ## ⚙️ How the System Works
 
